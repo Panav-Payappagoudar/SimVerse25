@@ -3,12 +3,21 @@ import RoomModel from "./models/Room.js";
 import roomManager from "./roomManager.js";
 
 export default function initSocket(server) {
+  console.log("Creating Socket.IO server...");
   const io = new Server(server, {
     cors: {
-      origin: process.env.CORS_ORIGIN || "*",
+      origin: ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
       methods: ["GET", "POST"],
+      credentials: true,
     },
-    // pingInterval / pingTimeout can be tuned for liveness
+    transports: ["websocket", "polling"],
+    allowEIO3: true,
+  });
+
+  console.log("Socket.IO initialized with transports:", ["websocket", "polling"]);
+
+  io.engine.on("connection_error", (err) => {
+    console.error("Socket.IO connection error:", err);
   });
 
   io.on("connection", (socket) => {

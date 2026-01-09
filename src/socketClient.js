@@ -5,17 +5,36 @@ let connected = false;
 
 function ensure(url = undefined) {
   if (socket) return socket;
-  const opts = {};
-  if (url) opts.path = url;
-  socket = io(process.env.VITE_BACKEND_URL || "http://localhost:8000", {
-    transports: ["websocket"],
+  const backendURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+  console.log("Connecting to socket.io at", backendURL);
+  
+  // Force polling transport in dev to avoid websocket upgrade issues.
+  socket = io(backendURL, {
+    transports: ["polling"],
     autoConnect: true,
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
   });
 
   socket.on("connect", () => {
     connected = true;
-    console.log("socket connected", socket.id);
+    console.log("socket connected", socket.id, "transport=", socket.io.engine.transport.name);
+    // expose to window for debugging
+    try { window.__socket = socket; } catch (e) {}
   });
+
+  socket.on("connect_error", (err) => {
+    console.error("socket connect error:", err);
+    if (err && err.message) console.error("connect_error.message:", err.message);
+  });
+
+  // Log transport changes
+  try {
+    socket.io && socket.io.on && socket.io.on('upgrade', (transport) => {
+      console.log('socket transport upgraded to', transport && transport.name);
+    });
+  } catch (e) {}
 
   socket.on("disconnect", () => {
     connected = false;

@@ -4,9 +4,10 @@ import { Scene } from '../Scene';
 import usePhysicsEngine from '../hooks/usePhysicsEngine';
 import { OrbitControls } from '@react-three/drei';
 import { getLocalUser } from '../utils/user';
+import { useParams } from 'react-router-dom';
 
-export default function RoomPage({ params }) {
-  const roomId = params?.roomId || (typeof window !== 'undefined' ? window.location.pathname.split('/').pop() : 'default');
+export default function RoomPage() {
+  const { roomId } = useParams();
   const { bodiesRef, isHost, requestChange, localUser } = usePhysicsEngine(roomId, 0.1);
 
   // bodiesRef.current is updated by the hook; pass to Scene as external bodies

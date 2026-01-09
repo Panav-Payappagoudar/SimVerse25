@@ -30,10 +30,55 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     }));
   }
 
+  // Generate a default local snapshot so UI shows something while waiting for server
+  function generateDefaultBodies(count = 51) {
+    const out = [];
+    // central black hole
+    out.push({
+      id: `body-0`,
+      position: new THREE.Vector3(0, 0, 0),
+      velocity: new THREE.Vector3(0, 0, 0),
+      mass: 500,
+      radius: 2,
+      isStatic: true,
+      ownerId: null,
+    });
+
+    for (let i = 1; i < count; i++) {
+      const radius = 10 + Math.random() * 20;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = (Math.random() - 0.5) * Math.PI * 0.5;
+      const x = radius * Math.cos(theta) * Math.cos(phi);
+      const y = radius * Math.sin(phi) * 0.2;
+      const z = radius * Math.sin(theta) * Math.cos(phi);
+      const pos = new THREE.Vector3(x, y, z);
+      const tangent = new THREE.Vector3(-z, 0, x).normalize();
+      tangent.add(new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2));
+      tangent.normalize();
+      const vMag = Math.sqrt(0.1 * 500 / Math.max(0.1, radius));
+      const vel = tangent.multiplyScalar(vMag);
+      out.push({
+        id: `body-${i}`,
+        position: pos,
+        velocity: vel,
+        mass: 1,
+        radius: 0.2,
+        isStatic: false,
+        ownerId: null,
+      });
+    }
+    return out;
+  }
+
   // Join room and wire socket events
   useEffect(() => {
     if (!roomId) return;
     const s = joinRoom(roomId, { user: localUser.current });
+
+    // Ensure there's something to render immediately while waiting for server
+    if (!bodiesRef.current || bodiesRef.current.length === 0) {
+      bodiesRef.current = generateDefaultBodies(51);
+    }
 
     const offInit = onInitData((data) => {
       if (data && data.snapshot) {

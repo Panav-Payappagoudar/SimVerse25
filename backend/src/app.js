@@ -16,6 +16,16 @@ app.use((req, res, next) => {
 	next();
 });
 
+// Log socket.io HTTP requests for debugging connection issues
+app.use((req, res, next) => {
+	try {
+		if (req.url && req.url.startsWith('/socket.io/')) {
+			console.log('[socket.io HTTP]', req.method, req.url, 'Origin:', req.headers.origin || req.headers.host);
+		}
+	} catch (e) {}
+	next();
+});
+
 app.get("/health", (req, res) => {
 	res.json({ ok: true, timestamp: Date.now() });
 });

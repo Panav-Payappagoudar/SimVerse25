@@ -68,9 +68,30 @@ export function Scene({ gravity, bodies: externalBodies, networked = false }) {
 
     return (
         <>
-            <BlackHole position={activeBodies[0].position} />
-            <Stars bodies={activeBodies} />
-            <ambientLight intensity={0.1} />
+            {activeBodies.length > 0 && <BlackHole position={activeBodies[0].position} />}
+            {activeBodies.length > 0 && <Stars bodies={activeBodies} />}
+            <ambientLight intensity={0.3} />
+
+            {/* Debug: simple sphere meshes for bodies when networked or for fallback visuals */}
+            {networked && activeBodies.length > 0 && (
+                <group>
+                    {activeBodies.slice(0, 100).map((b, i) => (
+                        <mesh
+                            key={b.id || i}
+                            position={[b.position.x || 0, b.position.y || 0, b.position.z || 0]}
+                        >
+                            <sphereGeometry args={[Math.max(0.1, b.radius || 0.2), 8, 8]} />
+                            <meshStandardMaterial emissive={b.isStatic ? '#ffdd88' : '#8899ff'} color={b.isStatic ? '#ffaa33' : '#6666ff'} />
+                        </mesh>
+                    ))}
+                </group>
+            )}
+
+            {/* Guaranteed visible debug marker at origin */}
+            <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[1.5, 16, 16]} />
+                <meshStandardMaterial emissive={'#ffff88'} color={'#ffaa33'} />
+            </mesh>
         </>
     );
 }
