@@ -5,8 +5,8 @@ import { BlackHole } from './components/BlackHole';
 import { updateBodies } from './PhysicsEngine';
 import * as THREE from 'three';
 
-export function Scene({ gravity }) {
-    // Initialize bodies
+export function Scene({ gravity, bodies: externalBodies, networked = false }) {
+    // Initialize bodies (local-only) unless external bodies are provided
     const bodies = useMemo(() => {
         const b = [];
 
@@ -55,17 +55,21 @@ export function Scene({ gravity }) {
         return b;
     }, []); // Run once on mount
 
-    // Physics Loop
-    useFrame((state, delta) => {
-        // Limit delta to avoid explosions on lag
-        const dt = Math.min(delta, 0.05);
-        updateBodies(bodies, gravity, dt);
-    });
+    const activeBodies = externalBodies || bodies;
+
+    // Only run local physics if not networked and not provided external bodies
+    if (!networked && !externalBodies) {
+        useFrame((state, delta) => {
+            // Limit delta to avoid explosions on lag
+            const dt = Math.min(delta, 0.05);
+            updateBodies(activeBodies, gravity, dt);
+        });
+    }
 
     return (
         <>
-            <BlackHole position={bodies[0].position} />
-            <Stars bodies={bodies} />
+            <BlackHole position={activeBodies[0].position} />
+            <Stars bodies={activeBodies} />
             <ambientLight intensity={0.1} />
         </>
     );
