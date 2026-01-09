@@ -14,6 +14,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
   const latestRemote = useRef(null);
   const rafRef = useRef();
   const tickTimer = useRef();
+  const pendingRef = useRef(new Map()); // nonce -> { targetId, prev }
 
   // Helpers to convert snapshot (plain objects) -> local body objects
   function initFromSnapshot(snapshot) {
@@ -50,16 +51,44 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     const offSync = onSyncPositions((frame) => {
       // unpack and store latest remote frame for interpolation
       latestRemote.current = frame;
+      try {
+        const unpacked = unpackFrame(frame);
+        for (const u of unpacked) {
+          const idx = bodiesRef.current.findIndex((b) => b.id === u.id);
+          if (idx >= 0) {
+            const b = bodiesRef.current[idx];
+            // set sync targets for smoothing
+            b.syncTarget = new THREE.Vector3(u.pos[0], u.pos[1], u.pos[2]);
+            b.syncVelocity = new THREE.Vector3(u.vel[0], u.vel[1], u.vel[2]);
+            b.syncUpdatedAt = performance.now();
+          }
+        }
+      } catch (e) {
+        console.warn("unpackFrame failed:", e);
+      }
     });
 
     const offPatch = onEntityPatch(({ patches }) => {
-      // apply reliable patches immediately into snapshot cache and local bodies
+      // apply reliable patches with smooth reconciliation
       if (!patches || !Array.isArray(patches)) return;
       for (const p of patches) {
         const idx = bodiesRef.current.findIndex((b) => b.id === p.id);
         if (idx >= 0) {
           const b = bodiesRef.current[idx];
-          if (p.pos) b.position.set(p.pos[0], p.pos[1], p.pos[2]);
+          // clear any optimistic pending for this target
+          for (const [nonce, pending] of pendingRef.current.entries()) {
+            if (pending.targetId === p.id) pendingRef.current.delete(nonce);
+          }
+
+          // set reconcile targets instead of snapping
+          if (p.pos) {
+            const target = new THREE.Vector3(p.pos[0], p.pos[1], p.pos[2]);
+            b.reconcileStart = b.position.clone();
+            b.reconcileTarget = target;
+            b.reconcileProgress = 0; // 0..1
+            b.reconcileDuration = 100; // ms
+            b.reconcileAt = performance.now();
+          }
           if (p.vel) b.velocity.set(p.vel[0], p.vel[1], p.vel[2]);
           if (typeof p.mass === "number") b.mass = p.mass;
           if (typeof p.radius === "number") b.radius = p.radius;
@@ -125,19 +154,27 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     let mounted = true;
     function step() {
       if (!mounted) return;
-      const frame = latestRemote.current;
-      if (frame && frame.ids && frame.data) {
-        // apply directly for now (fast), interpolation can be added per-body
-        const unpacked = unpackFrame(frame);
-        for (const u of unpacked) {
-          const idx = bodiesRef.current.findIndex((b) => b.id === u.id);
-          if (idx >= 0) {
-            const b = bodiesRef.current[idx];
-            // Short linear interpolation to smooth
-            const t = 0.5; // smoothing factor
-            b.position.lerp(new THREE.Vector3(u.pos[0], u.pos[1], u.pos[2]), t);
-            b.velocity.set(u.vel[0], u.vel[1], u.vel[2]);
+      const now = performance.now();
+      // For each body perform reconciliation or sync smoothing
+      for (const b of bodiesRef.current) {
+        // Reconciliation has priority
+        if (b.reconcileTarget) {
+          const elapsed = now - (b.reconcileAt || 0);
+          const t = Math.min(1, elapsed / (b.reconcileDuration || 100));
+          b.position.lerpVectors(b.reconcileStart || b.position, b.reconcileTarget, t);
+          if (t >= 1) {
+            b.reconcileTarget = null;
+            b.reconcileStart = null;
           }
+          continue;
+        }
+
+        // Smooth toward last sync target if available
+        if (b.syncTarget) {
+          // smoothing factor (per-frame) — smaller is smoother
+          const alpha = 0.15;
+          b.position.lerp(b.syncTarget, alpha);
+          if (b.syncVelocity) b.velocity.lerp(b.syncVelocity, alpha);
         }
       }
       rafRef.current = requestAnimationFrame(step);
@@ -151,7 +188,37 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
 
   function requestChangeLocal(targetId, action, params = {}) {
     const clientId = localUser.current.id;
-    requestChange(roomId, clientId, { action, targetId, params });
+    const nonce = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+    // apply optimistic local change and record previous state
+    const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
+    if (idx >= 0) {
+      const b = bodiesRef.current[idx];
+      const prev = {
+        position: b.position.clone(),
+        velocity: b.velocity.clone(),
+        mass: b.mass,
+        radius: b.radius,
+        ownerId: b.ownerId,
+      };
+      pendingRef.current.set(nonce, { targetId, prev, createdAt: Date.now() });
+
+      // optimistic apply
+      if (action === 'tweak') {
+        if (typeof params.mass === 'number') b.mass = params.mass;
+        if (typeof params.radius === 'number') b.radius = params.radius;
+        if (typeof params.isStatic === 'boolean') b.isStatic = params.isStatic;
+      } else if (action === 'move') {
+        if (params.pos && Array.isArray(params.pos) && params.pos.length >= 3) {
+          b.position.set(params.pos[0], params.pos[1], params.pos[2]);
+        }
+        if (params.vel && Array.isArray(params.vel) && params.vel.length >= 3) {
+          b.velocity.set(params.vel[0], params.vel[1], params.vel[2]);
+        }
+      }
+    }
+
+    requestChange(roomId, clientId, { action, targetId, params, nonce });
   }
 
   return {
