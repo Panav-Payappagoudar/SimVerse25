@@ -2,15 +2,16 @@ import { io } from "socket.io-client";
 
 let socket = null;
 let connected = false;
+let connectionPromise = null;
 
 function ensure(url = undefined) {
   if (socket) return socket;
   const backendURL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
   console.log("Connecting to socket.io at", backendURL);
   
-  // Force polling transport in dev to avoid websocket upgrade issues.
+  // Use both transports - polling will fallback to websocket
   socket = io(backendURL, {
-    transports: ["polling"],
+    transports: ["polling", "websocket"],
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,
@@ -22,6 +23,12 @@ function ensure(url = undefined) {
     console.log("socket connected", socket.id, "transport=", socket.io.engine.transport.name);
     // expose to window for debugging
     try { window.__socket = socket; } catch (e) {}
+    // Resolve connection promise if it exists
+    if (connectionPromise) {
+      const resolve = connectionPromise.resolve;
+      connectionPromise = null;
+      resolve(socket);
+    }
   });
 
   socket.on("connect_error", (err) => {
@@ -39,13 +46,56 @@ function ensure(url = undefined) {
   socket.on("disconnect", () => {
     connected = false;
     console.log("socket disconnected");
+    // Reset connection promise on disconnect
+    connectionPromise = null;
   });
 
   return socket;
 }
 
-export function joinRoom(roomId, clientMeta = {}) {
+function waitForConnection() {
+  if (!socket) ensure();
+  
+  if (socket.connected) {
+    return Promise.resolve(socket);
+  }
+
+  // If there's already a connection promise, return it
+  if (connectionPromise) {
+    return connectionPromise.promise;
+  }
+
+  // Create new connection promise
+  let resolve, reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  connectionPromise = { promise, resolve, reject };
+
+  // Set timeout
+  setTimeout(() => {
+    if (connectionPromise && connectionPromise.promise === promise) {
+      reject(new Error("Socket connection timeout"));
+      connectionPromise = null;
+    }
+  }, 10000);
+
+  return promise;
+}
+
+export async function joinRoom(roomId, clientMeta = {}) {
+  // Ensure socket is created
   const s = ensure();
+  
+  // Wait for connection if not already connected
+  if (!s.connected) {
+    console.log("Waiting for socket connection before joining room...");
+    await waitForConnection();
+  }
+  
+  console.log("Joining room:", roomId, "Socket connected:", s.connected, "Socket ID:", s.id);
   s.emit("join_room", { roomId, clientMeta });
   return s;
 }
@@ -84,6 +134,17 @@ export function onEntityPatch(cb) {
   return () => socket.off("entity_patch", cb);
 }
 
+export function onApplyRequest(cb) {
+  if (!socket) ensure();
+  socket.on("apply_request", cb);
+  return () => socket.off("apply_request", cb);
+}
+
+export function sendEntityPatch(roomId, patches, tick = 0) {
+  if (!socket) ensure();
+  socket.emit("entity_patch", { roomId, patches, tick });
+}
+
 export function sendHeartbeat(roomId) {
   if (!socket) ensure();
   socket.emit("host_heartbeat", { roomId, ts: Date.now() });
@@ -102,6 +163,8 @@ export default {
   onInitData,
   onHostAssigned,
   onEntityPatch,
+  onApplyRequest,
+  sendEntityPatch,
   sendHeartbeat,
   requestSnapshot,
 };

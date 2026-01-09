@@ -66,7 +66,7 @@ export default function initSocket(server) {
       if (!roomId || !request) return socket.emit("error", { message: "invalid_request" });
 
       // Basic validation
-      const allowedActions = ["move", "tweak", "set_owner", "delete"];
+      const allowedActions = ["move", "tweak", "set_owner", "delete", "add"];
       if (!allowedActions.includes(request.action)) {
         return socket.emit("error", { message: "action_not_allowed" });
       }

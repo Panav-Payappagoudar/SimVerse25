@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { updateBodies } from "../PhysicsEngine";
-import socketClient, { emitStateFrame, joinRoom, onSyncPositions, onInitData, onHostAssigned, requestChange, onEntityPatch, sendHeartbeat } from "../socketClient";
+import socketClient, { emitStateFrame, joinRoom, onSyncPositions, onInitData, onHostAssigned, requestChange, onEntityPatch, onApplyRequest, sendEntityPatch, sendHeartbeat } from "../socketClient";
 import { getLocalUser } from "../utils/user";
 import { packFrame, unpackFrame } from "../utils/packets";
 
@@ -10,11 +10,17 @@ const TICK_MS = 1000 / 60; // 60Hz
 export default function usePhysicsEngine(roomId, gravity = 0.1) {
   const localUser = useRef(getLocalUser());
   const [isHost, setIsHost] = useState(false);
+  const isHostRef = useRef(false); // Keep ref in sync with state for handlers
   const bodiesRef = useRef([]); // array of { id, position: THREE.Vector3, velocity: THREE.Vector3, ... }
   const latestRemote = useRef(null);
   const rafRef = useRef();
   const tickTimer = useRef();
   const pendingRef = useRef(new Map()); // nonce -> { targetId, prev }
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
 
   // Helpers to convert snapshot (plain objects) -> local body objects
   function initFromSnapshot(snapshot) {
@@ -70,16 +76,24 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     return out;
   }
 
+  // Keep isHostRef in sync with isHost state
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
+
   // Join room and wire socket events
   useEffect(() => {
     if (!roomId) return;
-    const s = joinRoom(roomId, { user: localUser.current });
 
     // Ensure there's something to render immediately while waiting for server
     if (!bodiesRef.current || bodiesRef.current.length === 0) {
       bodiesRef.current = generateDefaultBodies(51);
     }
 
+    let s = null;
+    let cleanupFunctions = [];
+
+    // Set up event listeners first (they can be set up before connection)
     const offInit = onInitData((data) => {
       if (data && data.snapshot) {
         initFromSnapshot(data.snapshot);
@@ -88,10 +102,12 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         setIsHost(data.hostId === s.id);
       }
     });
+    cleanupFunctions.push(offInit);
 
     const offHost = onHostAssigned(({ hostId }) => {
       setIsHost(hostId === (s && s.id));
     });
+    cleanupFunctions.push(offHost);
 
     const offSync = onSyncPositions((frame) => {
       // unpack and store latest remote frame for interpolation
@@ -112,6 +128,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         console.warn("unpackFrame failed:", e);
       }
     });
+    cleanupFunctions.push(offSync);
 
     const offPatch = onEntityPatch(({ patches }) => {
       // apply reliable patches with smooth reconciliation
@@ -139,20 +156,117 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
           if (typeof p.radius === "number") b.radius = p.radius;
           if (typeof p.isStatic === "boolean") b.isStatic = p.isStatic;
           if (p.ownerId) b.ownerId = p.ownerId;
+        } else if (p.id) {
+          // New body from patch
+          const newBody = {
+            id: p.id,
+            position: p.pos ? new THREE.Vector3(p.pos[0], p.pos[1], p.pos[2]) : new THREE.Vector3(0, 0, 0),
+            velocity: p.vel ? new THREE.Vector3(p.vel[0], p.vel[1], p.vel[2]) : new THREE.Vector3(0, 0, 0),
+            mass: typeof p.mass === "number" ? p.mass : 1,
+            radius: typeof p.radius === "number" ? p.radius : 0.2,
+            isStatic: !!p.isStatic,
+            ownerId: p.ownerId || null,
+          };
+          bodiesRef.current.push(newBody);
         }
       }
     });
+    cleanupFunctions.push(offPatch);
+
+    // Host handles apply_request from guests (set up always, check isHost at runtime)
+    const offApplyRequest = onApplyRequest(({ roomId: reqRoomId, clientId, request }) => {
+      if (reqRoomId !== roomId || !isHostRef.current) return;
+
+      const { action, targetId, params, nonce } = request;
+      
+      if (action === 'add') {
+        // Add new planet
+        const newId = `body-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const pos = params.pos || [15, 0, 0];
+        const vel = params.vel || [0, 0, 0];
+        const mass = params.mass || 1;
+        const radius = params.radius || 0.2;
+        
+        const newBody = {
+          id: newId,
+          position: new THREE.Vector3(pos[0], pos[1], pos[2]),
+          velocity: new THREE.Vector3(vel[0], vel[1], vel[2]),
+          mass,
+          radius,
+          isStatic: false,
+          ownerId: clientId,
+        };
+        
+        bodiesRef.current.push(newBody);
+        
+        // Send patch to all clients
+        sendEntityPatch(roomId, [{
+          id: newId,
+          pos: [pos[0], pos[1], pos[2]],
+          vel: [vel[0], vel[1], vel[2]],
+          mass,
+          radius,
+          isStatic: false,
+          ownerId: clientId,
+        }], Date.now());
+      } else if (action === 'delete') {
+        // Remove planet
+        const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
+        if (idx >= 0) {
+          bodiesRef.current.splice(idx, 1);
+          // Note: For deletion, we'd need a separate mechanism or just stop sending updates
+          // For now, we'll mark it as deleted by removing from array
+        }
+      } else if (action === 'tweak' || action === 'move') {
+        // Apply existing tweak/move logic
+        const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
+        if (idx >= 0) {
+          const b = bodiesRef.current[idx];
+          if (action === 'tweak') {
+            if (typeof params.mass === 'number') b.mass = params.mass;
+            if (typeof params.radius === 'number') b.radius = params.radius;
+            if (typeof params.isStatic === 'boolean') b.isStatic = params.isStatic;
+          } else if (action === 'move') {
+            if (params.pos) b.position.set(params.pos[0], params.pos[1], params.pos[2]);
+            if (params.vel) b.velocity.set(params.vel[0], params.vel[1], params.vel[2]);
+          }
+          
+          // Send patch
+          sendEntityPatch(roomId, [{
+            id: targetId,
+            pos: [b.position.x, b.position.y, b.position.z],
+            vel: [b.velocity.x, b.velocity.y, b.velocity.z],
+            mass: b.mass,
+            radius: b.radius,
+            isStatic: b.isStatic,
+            ownerId: b.ownerId,
+          }], Date.now());
+        }
+      }
+    });
+    cleanupFunctions.push(offApplyRequest);
+
+    // Join room after setting up listeners
+    joinRoom(roomId, { user: localUser.current })
+      .then((socket) => {
+        s = socket;
+        console.log("Successfully joined room:", roomId, "Socket ID:", socket.id);
+      })
+      .catch((err) => {
+        console.error("Failed to join room:", err);
+        // Optionally show user-facing error or retry
+      });
 
     // heartbeat to keep room alive
     const hb = setInterval(() => sendHeartbeat(roomId), 1000);
+    cleanupFunctions.push(() => clearInterval(hb));
 
     return () => {
-      offInit();
-      offHost();
-      offSync();
-      offPatch();
-      clearInterval(hb);
-      try { s && s.disconnect(); } catch (e) {}
+      cleanupFunctions.forEach(fn => {
+        try { fn(); } catch (e) {}
+      });
+      // Note: Don't disconnect socket here as it might be used by other components
+      // The socket will be cleaned up when the component unmounts if needed
     };
   }, [roomId]);
 
@@ -235,6 +349,47 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     const clientId = localUser.current.id;
     const nonce = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
 
+    // If host, apply directly and send patch
+    if (isHost && (action === 'add' || action === 'delete')) {
+      if (action === 'add') {
+        const newId = `body-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const pos = params.pos || [15, 0, 0];
+        const vel = params.vel || [0, 0, 0];
+        const mass = params.mass || 1;
+        const radius = params.radius || 0.2;
+        
+        const newBody = {
+          id: newId,
+          position: new THREE.Vector3(pos[0], pos[1], pos[2]),
+          velocity: new THREE.Vector3(vel[0], vel[1], vel[2]),
+          mass,
+          radius,
+          isStatic: false,
+          ownerId: clientId,
+        };
+        
+        bodiesRef.current.push(newBody);
+        
+        // Send patch
+        sendEntityPatch(roomId, [{
+          id: newId,
+          pos: [pos[0], pos[1], pos[2]],
+          vel: [vel[0], vel[1], vel[2]],
+          mass,
+          radius,
+          isStatic: false,
+          ownerId: clientId,
+        }], Date.now());
+        return;
+      } else if (action === 'delete') {
+        const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
+        if (idx >= 0) {
+          bodiesRef.current.splice(idx, 1);
+        }
+        return;
+      }
+    }
+
     // apply optimistic local change and record previous state
     const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
     if (idx >= 0) {
@@ -266,10 +421,16 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     requestChange(roomId, clientId, { action, targetId, params, nonce });
   }
 
+  function addPlanet(params = {}) {
+    const pos = params.pos || [15, 0, 0];
+    requestChangeLocal(null, 'add', { ...params, pos });
+  }
+
   return {
     bodiesRef,
     isHost,
     requestChange: requestChangeLocal,
+    addPlanet,
     localUser: localUser.current,
   };
 }
