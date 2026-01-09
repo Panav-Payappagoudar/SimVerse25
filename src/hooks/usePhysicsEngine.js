@@ -25,15 +25,28 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
   // Helpers to convert snapshot (plain objects) -> local body objects
   function initFromSnapshot(snapshot) {
     const arr = snapshot && snapshot.bodies ? snapshot.bodies : [];
-    bodiesRef.current = arr.map((b, i) => ({
-      id: b.id != null ? b.id : `b${i}`,
-      position: new THREE.Vector3(b.position.x || 0, b.position.y || 0, b.position.z || 0),
-      velocity: new THREE.Vector3(b.velocity.x || 0, b.velocity.y || 0, b.velocity.z || 0),
-      mass: b.mass || 1,
-      radius: b.radius || 1,
-      isStatic: !!b.isStatic,
-      ownerId: b.ownerId || null,
-    }));
+    bodiesRef.current = arr.map((b, i) => {
+      const radius = b.radius || (b.isStatic ? 2 : 1);
+      const mass = b.mass || (b.isStatic ? 500 : 1);
+      // Infer type if not set: small radius = star, large = planet, massive = black hole
+      let type = b.type;
+      if (!type) {
+        if (b.isStatic || b.isFixed) type = 'blackhole';
+        else if (radius <= 0.3) type = 'star';
+        else type = 'planet';
+      }
+      return {
+        id: b.id != null ? b.id : `b${i}`,
+        position: new THREE.Vector3(b.position.x || 0, b.position.y || 0, b.position.z || 0),
+        velocity: new THREE.Vector3(b.velocity.x || 0, b.velocity.y || 0, b.velocity.z || 0),
+        mass,
+        radius,
+        isStatic: !!b.isStatic,
+        isFixed: !!b.isFixed,
+        ownerId: b.ownerId || null,
+        type,
+      };
+    });
   }
 
   // Generate a default local snapshot so UI shows something while waiting for server
@@ -180,12 +193,14 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
       const { action, targetId, params, nonce } = request;
       
       if (action === 'add') {
-        // Add new planet
+        // Add new planet or star
         const newId = `body-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const pos = params.pos || [15, 0, 0];
         const vel = params.vel || [0, 0, 0];
-        const mass = params.mass || 1;
-        const radius = params.radius || 0.2;
+        const bodyType = params.type || 'planet';
+        // Different defaults for stars vs planets
+        const mass = params.mass !== undefined ? params.mass : (bodyType === 'star' ? 0.5 : 1);
+        const radius = params.radius !== undefined ? params.radius : (bodyType === 'star' ? 0.15 : 0.5);
         
         const newBody = {
           id: newId,
@@ -195,6 +210,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
           radius,
           isStatic: false,
           ownerId: clientId,
+          type: bodyType,
         };
         
         bodiesRef.current.push(newBody);
@@ -208,6 +224,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
           radius,
           isStatic: false,
           ownerId: clientId,
+          type: bodyType,
         }], Date.now());
       } else if (action === 'delete') {
         // Remove planet
@@ -355,8 +372,10 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         const newId = `body-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const pos = params.pos || [15, 0, 0];
         const vel = params.vel || [0, 0, 0];
-        const mass = params.mass || 1;
-        const radius = params.radius || 0.2;
+        const bodyType = params.type || 'planet';
+        // Different defaults for stars vs planets
+        const mass = params.mass !== undefined ? params.mass : (bodyType === 'star' ? 0.5 : 1);
+        const radius = params.radius !== undefined ? params.radius : (bodyType === 'star' ? 0.15 : 0.5);
         
         const newBody = {
           id: newId,
@@ -423,7 +442,15 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
 
   function addPlanet(params = {}) {
     const pos = params.pos || [15, 0, 0];
-    requestChangeLocal(null, 'add', { ...params, pos });
+    requestChangeLocal(null, 'add', { ...params, pos, type: 'planet' });
+  }
+
+  function addStar(params = {}) {
+    const pos = params.pos || [15, 0, 0];
+    // Stars are smaller, so adjust defaults
+    const defaultMass = params.mass || 0.5;
+    const defaultRadius = params.radius || 0.15;
+    requestChangeLocal(null, 'add', { ...params, pos, mass: defaultMass, radius: defaultRadius, type: 'star' });
   }
 
   return {
@@ -431,6 +458,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     isHost,
     requestChange: requestChangeLocal,
     addPlanet,
+    addStar,
     localUser: localUser.current,
   };
 }

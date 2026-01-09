@@ -1,97 +1,123 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Stars } from './components/Stars';
 import { BlackHole } from './components/BlackHole';
+import { Planets } from './components/Planets';
 import { updateBodies } from './PhysicsEngine';
 import * as THREE from 'three';
 
 export function Scene({ gravity, bodies: externalBodies, networked = false }) {
+    const [renderKey, setRenderKey] = useState(0);
+    const frameCount = useRef(0);
+
     // Initialize bodies (local-only) unless external bodies are provided
     const bodies = useMemo(() => {
         const b = [];
 
         // 1. Central Black Hole
         b.push({
+            id: 'blackhole-0',
             position: new THREE.Vector3(0, 0, 0),
             velocity: new THREE.Vector3(0, 0, 0),
-            mass: 500, // Massive!
-            isFixed: true
+            mass: 500,
+            radius: 2,
+            isFixed: true,
+            isStatic: true,
         });
 
-        // 2. 50 Random Stars
-        for (let i = 0; i < 50; i++) {
-            // Random position in a disk/sphere
-            const radius = 10 + Math.random() * 20; // 10 to 30 units away
-            const theta = Math.random() * Math.PI * 2;
-            const phi = (Math.random() - 0.5) * Math.PI * 0.5; // Flattened disk-ish
+        // 2. 50 Random Stars (only if no external bodies provided)
+        if (!externalBodies) {
+            for (let i = 0; i < 50; i++) {
+                const radius = 10 + Math.random() * 20;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = (Math.random() - 0.5) * Math.PI * 0.5;
 
-            const x = radius * Math.cos(theta) * Math.cos(phi);
-            const y = radius * Math.sin(phi) * 0.2; // Flattened
-            const z = radius * Math.sin(theta) * Math.cos(phi);
+                const x = radius * Math.cos(theta) * Math.cos(phi);
+                const y = radius * Math.sin(phi) * 0.2;
+                const z = radius * Math.sin(theta) * Math.cos(phi);
 
-            const pos = new THREE.Vector3(x, y, z);
+                const pos = new THREE.Vector3(x, y, z);
+                const tangent = new THREE.Vector3(-z, 0, x).normalize();
+                tangent.add(new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2));
+                tangent.normalize();
+                const vMag = Math.sqrt(0.1 * 500 / radius);
+                const vel = tangent.multiplyScalar(vMag);
 
-            // Circular orbit velocity: v = sqrt(GM/r)
-            // Tangent vector: (-z, 0, x) normalized roughly
-            const tangent = new THREE.Vector3(-z, 0, x).normalize();
-
-            // Randomize orbit direction slightly
-            tangent.add(new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2));
-            tangent.normalize();
-
-            // v = sqrt(G * M_bh / r)
-            // We use initial Gravity=0.1. If user changes G, orbits change.
-            // Let's assume standard G=0.1 for stable initial orbits.
-            const vMag = Math.sqrt(0.1 * 500 / radius);
-            const vel = tangent.multiplyScalar(vMag);
-
-            b.push({
-                position: pos,
-                velocity: vel,
-                mass: 1,
-                isFixed: false
-            });
+                b.push({
+                    id: `star-${i}`,
+                    position: pos,
+                    velocity: vel,
+                    mass: 1,
+                    radius: 0.2,
+                    isFixed: false,
+                    isStatic: false,
+                    type: 'star',
+                });
+            }
         }
         return b;
     }, []); // Run once on mount
 
     const activeBodies = externalBodies || bodies;
 
+    // Force re-render every 10 frames when networked to update positions
+    useFrame(() => {
+        if (networked && externalBodies) {
+            frameCount.current++;
+            if (frameCount.current % 10 === 0) {
+                setRenderKey(prev => prev + 1);
+            }
+        }
+    });
+
     // Only run local physics if not networked and not provided external bodies
     if (!networked && !externalBodies) {
         useFrame((state, delta) => {
-            // Limit delta to avoid explosions on lag
             const dt = Math.min(delta, 0.05);
             updateBodies(activeBodies, gravity, dt);
         });
     }
 
+    // Find black hole (fixed/static body at index 0 or with id containing 'blackhole')
+    const blackHole = activeBodies.find(b => (b.isFixed || b.isStatic) && (b.id?.includes('blackhole') || activeBodies.indexOf(b) === 0));
+    const blackHolePosition = blackHole?.position || (activeBodies.length > 0 ? activeBodies[0].position : new THREE.Vector3(0, 0, 0));
+
+    // Separate stars and planets
+    const stars = activeBodies.filter(b => !b.isFixed && !b.isStatic && (b.type === 'star' || (!b.type && b.radius <= 0.3)));
+    const planets = activeBodies.filter(b => !b.isFixed && !b.isStatic && (b.type === 'planet' || (!b.type && b.radius > 0.3)));
+
     return (
         <>
-            {activeBodies.length > 0 && <BlackHole position={activeBodies[0].position} />}
-            {activeBodies.length > 0 && <Stars bodies={activeBodies} />}
-            <ambientLight intensity={0.3} />
+            {/* Enhanced Lighting */}
+            <ambientLight intensity={0.4} />
+            <pointLight position={[10, 10, 10]} intensity={0.5} decay={2} />
+            <pointLight position={[-10, -10, -10]} intensity={0.3} decay={2} color="#4a90e2" />
+            <directionalLight position={[5, 5, 5]} intensity={0.3} />
 
-            {/* Debug: simple sphere meshes for bodies when networked or for fallback visuals */}
-            {networked && activeBodies.length > 0 && (
-                <group>
-                    {activeBodies.slice(0, 100).map((b, i) => (
-                        <mesh
-                            key={b.id || i}
-                            position={[b.position.x || 0, b.position.y || 0, b.position.z || 0]}
-                        >
-                            <sphereGeometry args={[Math.max(0.1, b.radius || 0.2), 8, 8]} />
-                            <meshStandardMaterial emissive={b.isStatic ? '#ffdd88' : '#8899ff'} color={b.isStatic ? '#ffaa33' : '#6666ff'} />
-                        </mesh>
-                    ))}
-                </group>
+            {/* Black Hole with better visuals */}
+            {blackHole && <BlackHole position={blackHolePosition} />}
+
+            {/* Render Stars */}
+            {stars.length > 0 && <Stars key={`stars-${renderKey}`} bodies={stars} />}
+
+            {/* Render Planets */}
+            {planets.length > 0 && <Planets key={`planets-${renderKey}`} bodies={planets} />}
+
+            {/* Render any remaining bodies that aren't categorized */}
+            {activeBodies.filter(b => 
+                !b.isFixed && !b.isStatic && 
+                b.type !== 'star' && b.type !== 'planet' &&
+                !stars.includes(b) && !planets.includes(b)
+            ).length > 0 && (
+                <Planets 
+                    key={`other-${renderKey}`} 
+                    bodies={activeBodies.filter(b => 
+                        !b.isFixed && !b.isStatic && 
+                        b.type !== 'star' && b.type !== 'planet' &&
+                        !stars.includes(b) && !planets.includes(b)
+                    )} 
+                />
             )}
-
-            {/* Guaranteed visible debug marker at origin */}
-            <mesh position={[0, 0, 0]}>
-                <sphereGeometry args={[1.5, 16, 16]} />
-                <meshStandardMaterial emissive={'#ffff88'} color={'#ffaa33'} />
-            </mesh>
         </>
     );
 }

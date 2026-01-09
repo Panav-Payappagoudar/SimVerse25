@@ -7,37 +7,49 @@ const Star = ({ body }) => {
     const meshRef = useRef();
 
     useFrame(() => {
-        if (meshRef.current && body) {
+        if (meshRef.current && body && body.position) {
             meshRef.current.position.copy(body.position);
         }
     });
 
+    const radius = Math.max(0.05, body.radius || 0.15);
+
+    // Random twinkling color variation
+    const starColor = useMemo(() => {
+        const colors = ['#ffffff', '#f0f0ff', '#fff0f0', '#f0fff0', '#fffff0'];
+        return colors[Math.floor((body.id?.charCodeAt(0) || 0) % colors.length)];
+    }, [body.id]);
+
     return (
-        // Trail needs to wrap the moving object or target it.
-        // Drei Trail: <Trail ...><mesh .../></Trail>
         <Trail
-            width={1} // Width of the line
-            length={10} // Length of the trail
-            color={'#ffffff'} // Color of the trail
-            attenuation={(t) => t * t} // Transparency attenuation
+            width={0.5}
+            length={8}
+            color={starColor}
+            attenuation={(t) => t * t}
+            local={false}
         >
             <mesh ref={meshRef}>
-                <sphereGeometry args={[0.2, 16, 16]} />
-                <meshBasicMaterial color="white" />
+                <sphereGeometry args={[radius, 16, 16]} />
+                <meshBasicMaterial 
+                    color={starColor}
+                    emissive={starColor}
+                    emissiveIntensity={1}
+                />
             </mesh>
         </Trail>
     );
 };
 
 export function Stars({ bodies }) {
-    // Filter out the fixed black hole if it's in bodies array, or assume passed bodies are just stars?
-    // We will assume 'bodies' passed here includes stars only or we check.
-    const stars = useMemo(() => bodies.filter(b => !b.isFixed), [bodies]);
+    // Filter and memoize stars
+    const stars = useMemo(() => {
+        return bodies.filter(b => b && b.position && b.id && !b.isFixed && !b.isStatic);
+    }, [bodies]);
 
     return (
         <>
-            {stars.map((body, i) => (
-                <Star key={i} body={body} />
+            {stars.map((body) => (
+                <Star key={body.id} body={body} />
             ))}
         </>
     );

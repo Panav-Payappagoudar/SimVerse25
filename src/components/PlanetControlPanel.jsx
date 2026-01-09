@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as THREE from 'three';
 
-export default function PlanetControlPanel({ isHost, addPlanet, bodiesRef, requestChange, onSimulationToggle, isSimulationRunning = true }) {
+export default function PlanetControlPanel({ isHost, addPlanet, addStar, bodiesRef, requestChange, onSimulationToggle, isSimulationRunning = true }) {
   const [mass, setMass] = useState(1);
   const [radius, setRadius] = useState(0.5);
   const [posX, setPosX] = useState(15);
@@ -311,14 +311,38 @@ export default function PlanetControlPanel({ isHost, addPlanet, bodiesRef, reque
         />
       </div>
 
-      {/* Add Planet Button */}
+      {/* Add Buttons */}
       {isHost && (
-        <button
-          onClick={handleAddPlanet}
-          style={{ ...buttonStyle, width: '100%', margin: 0, padding: '12px', fontSize: '14px', fontWeight: 'bold' }}
-        >
-          ➕ Add Planet
-        </button>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+          <button
+            onClick={handleAddPlanet}
+            style={{ ...buttonStyle, flex: 1, margin: 0, padding: '12px', fontSize: '14px', fontWeight: 'bold', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+          >
+            🪐 Add Planet
+          </button>
+          <button
+            onClick={() => {
+              addStar({
+                mass: mass < 1 ? mass : 0.5,
+                radius: radius < 0.3 ? radius : 0.15,
+                pos: [posX, posY, posZ],
+                vel: [velX, velY, velZ],
+              });
+              // Reset to defaults after adding
+              setMass(0.5);
+              setRadius(0.15);
+              setPosX(15);
+              setPosY(0);
+              setPosZ(0);
+              setVelX(0);
+              setVelY(0);
+              setVelZ(0);
+            }}
+            style={{ ...buttonStyle, flex: 1, margin: 0, padding: '12px', fontSize: '14px', fontWeight: 'bold', background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
+          >
+            ⭐ Add Star
+          </button>
+        </div>
       )}
 
       <div style={{ marginTop: '15px', fontSize: '11px', color: '#888', textAlign: 'center' }}>
