@@ -9,15 +9,27 @@
 
 ---
 
-## 🚀 The Pitch
-Physics textbooks show static diagrams of orbits. But the universe is **chaotic, dynamic, and unpredictable**.
+## 🧪 The "Magic" Moment (Try This First!)
+**Don't just watch—experience the synchronization.**
 
-**Gravity Sandbox** is a real-time, collaborative N-Body physics engine that runs directly in your browser. We bridge the gap between abstract equations and visual intuition, allowing users to experience **Chaos Theory**, **Gravity Assists**, and **Orbital Resonance** firsthand.
+1.  Open the **[Live Demo](https://orbiting-canvas-3.onrender.com/)** in your current browser.
+2.  Open the **same link** in a **second window** (or on your phone/friend's laptop).
+3.  **Add a Star** on the first screen.
+4.  **Boom.** Watch it appear instantly on the second screen. 
 
-Unlike standard simulations, this is a **Shared Reality**. Using high-frequency WebSockets, multiple users can join the same room, spawn planets, and watch as their gravitational fields interact in real-time. **It's like Google Docs, but for Astrophysics.**
+Every movement, every new planet, and every gravitational shift is synced across all connected devices in milliseconds. It’s not just a simulation; it’s a shared universe.
 
-### 🔗 [Launch Live Simulation](https://orbiting-canvas-3.onrender.com/)
-*(Click to enter the sandbox)*
+---
+
+## 🚀 The Pitch: A New Way to Teach Physics
+Imagine a physics classroom where the whiteboard comes alive. 
+
+* **The Teacher** adds a massive Black Hole in the center of the screen on their laptop.
+* **The Student**, sitting across the room on their iPad, instantly sees the class's solar system warp into a new orbit.
+* The Student asks, *"What happens if I throw a moon here?"* and drags a new body into the simulation.
+* The Teacher and the whole class watch together as the moon enters a stable orbit—or crashes spectacularly.
+
+**Gravity Sandbox** bridges the gap between abstract equations and visual intuition. It transforms Physics from a solitary calculation into a **collaborative, interactive discussion**. It is like Google Docs, but for Astrophysics.
 
 ---
 
@@ -35,9 +47,9 @@ Unlike standard simulations, this is a **Shared Reality**. Using high-frequency 
 
 ### 1. 🤝 Real-Time Collaborative Multiplayer
 Built on a **Host-Relay Architecture** using **Socket.io**.
-* **Zero-Lag Sync:** When one user modifies a solar system, changes are emitted instantly to all connected clients.
-* **Shared Creativity:** One user can be the "Architect" placing stars, while another acts as "Destructor" throwing asteroids to disrupt orbits.
-* **Optimistic UI:** Local physics run at 60FPS while syncing state across the network.
+* **Instant Sync:** If User A adds a star, User B sees it generate immediately.
+* **Shared Creativity:** Collaborative world-building where multiple users can design (or destroy) a solar system together.
+* **Optimistic UI:** Local physics run at 60FPS while syncing state across the network, ensuring zero lag for the user.
 
 ### 2. ⚛️ Custom N-Body Physics Engine
 We did not use pre-made physics libraries (like Cannon.js). We wrote a custom symplectic integrator from scratch.
@@ -90,24 +102,33 @@ src/
 
 ## 🚀 Local Installation
 
-Want to run the simulation locally?
+If you want to run the simulation locally or contribute to the code:
 
-1.  **Clone the Repo**
-    ```bash
-    git clone [https://github.com/Panav-Payappagoudar/SimVerse25.git](https://github.com/Panav-Payappagoudar/SimVerse25.git)
-    cd SimVerse25
-    ```
+**1. Clone the Repo**
+```bash
+git clone https://github.com/Panav-Payappagoudar/SimVerse25.git
+cd SimVerse25
+```
 
-2.  **Install Dependencies**
-    ```bash
-    npm install
-    ```
+**2. Install Dependencies**
+```bash
+npm install
+```
 
-3.  **Run Development Server**
-    ```bash
-    npm run dev
-    ```
-    *Open `http://localhost:5173` to view the simulation.*
+**3. Run Development Server**
+```bash
+npm run dev
+```
+
+**4. Launch**
+Open `http://localhost:5173` to view the simulation.
+
+### Building for Production
+To build the project for production deployment:
+```bash
+npm run build
+```
+The built files will be placed in the `dist/` directory.
 
 ---
 
@@ -129,11 +150,14 @@ We use a **Semi-Implicit Euler** approach for stability:
 
 ---
 
-## 🙏 Acknowledgments
+## 🙏 Acknowledgments & Credits
 
-* **SimVerse'25 Organizers** (ACS & ACM Chapters) for the platform.
-* **Three.js Community** for the incredible open-source graphics tools.
-* **Newton & Einstein** for the math.
+This project was passionately developed during the **24-hour SimVerse'25 Hackathon**, organized by the **ACS & ACM Chapters** at **VIT-AP University**.
+
+We would like to extend our sincere gratitude to the organizers for providing this platform to innovate. It pushed us to learn WebSocket architecture, 3D shader mathematics, and orbital mechanics in a single day.
+
+**Explore the cosmos with us:**
+### 🔗 [Launch Live Simulation](https://orbiting-canvas-3.onrender.com/)
 
 ---
 
