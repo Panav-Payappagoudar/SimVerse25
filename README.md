@@ -13,7 +13,7 @@ A mesmerizing 3D gravity simulation sandbox built with React and Three.js. Watch
 
 ## 🚀 Live Demo
 
-Check out the live demo [here](your-deployment-url) (if deployed).
+Check out the live demo [here](https://orbiting-canvas-3.onrender.com/) .
 
 ## 🛠️ Tech Stack
 
