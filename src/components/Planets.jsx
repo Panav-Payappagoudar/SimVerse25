@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 const Planet = ({ body }) => {
-    const meshRef = useRef();
+    const groupRef = useRef();
     const materialRef = useRef();
 
     // Calculate color based on mass (lighter = more massive)
@@ -21,17 +21,17 @@ const Planet = ({ body }) => {
     }, [body.mass]);
 
     useFrame(() => {
-        if (meshRef.current && body && body.position) {
-            meshRef.current.position.copy(body.position);
+        if (groupRef.current && body && body.position) {
+            groupRef.current.position.copy(body.position);
         }
     });
 
     const radius = Math.max(0.1, body.radius || 0.5);
 
     return (
-        <group>
+        <group ref={groupRef}>
             {/* Main planet sphere */}
-            <mesh ref={meshRef}>
+            <mesh>
                 <sphereGeometry args={[radius, 32, 32]} />
                 <meshStandardMaterial
                     ref={materialRef}
@@ -43,7 +43,7 @@ const Planet = ({ body }) => {
                 />
             </mesh>
             {/* Glow effect */}
-            <mesh ref={meshRef}>
+            <mesh>
                 <sphereGeometry args={[radius * 1.2, 32, 32]} />
                 <meshBasicMaterial
                     color={color}

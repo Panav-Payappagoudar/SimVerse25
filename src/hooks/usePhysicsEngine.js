@@ -7,15 +7,23 @@ import { packFrame, unpackFrame } from "../utils/packets";
 
 const TICK_MS = 1000 / 60; // 60Hz
 
-export default function usePhysicsEngine(roomId, gravity = 0.1) {
+export default function usePhysicsEngine(roomId, gravity = 0.1, paused = false) {
   const localUser = useRef(getLocalUser());
-  const [isHost, setIsHost] = useState(false);
+  const [isHost, setIsHost] = useState(true); // Default to host so simulation starts immediately
   const isHostRef = useRef(false); // Keep ref in sync with state for handlers
   const bodiesRef = useRef([]); // array of { id, position: THREE.Vector3, velocity: THREE.Vector3, ... }
   const latestRemote = useRef(null);
   const rafRef = useRef();
   const tickTimer = useRef();
+
   const pendingRef = useRef(new Map()); // nonce -> { targetId, prev }
+  const pausedRef = useRef(paused);
+  const [bodyCount, setBodyCount] = useState(0);
+  
+  // Keep pausedRef in sync with paused prop
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
   
   // Keep ref in sync with state
   useEffect(() => {
@@ -49,43 +57,93 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     });
   }
 
-  // Generate a default local snapshot so UI shows something while waiting for server
-  function generateDefaultBodies(count = 51) {
+  // Generate a default local snapshot with 1 black hole, 10 stars, 60 planets (6 per star)
+  function generateDefaultBodies() {
     const out = [];
-    // central black hole
+    const G = 0.1;
+    const blackHoleMass = 500;
+    
+    // 1. Central Black Hole
     out.push({
-      id: `body-0`,
+      id: `blackhole-0`,
       position: new THREE.Vector3(0, 0, 0),
       velocity: new THREE.Vector3(0, 0, 0),
-      mass: 500,
+      mass: blackHoleMass,
       radius: 2,
       isStatic: true,
+      isFixed: true,
+      type: 'blackhole',
       ownerId: null,
     });
 
-    for (let i = 1; i < count; i++) {
-      const radius = 10 + Math.random() * 20;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = (Math.random() - 0.5) * Math.PI * 0.5;
-      const x = radius * Math.cos(theta) * Math.cos(phi);
-      const y = radius * Math.sin(phi) * 0.2;
-      const z = radius * Math.sin(theta) * Math.cos(phi);
+    // 2. Create 10 Stars orbiting the black hole
+    const numStars = 10;
+    const stars = [];
+    for (let i = 0; i < numStars; i++) {
+      const orbitRadius = 12 + i * 4; // Stars at distances 12, 16, 20, 24, 28, 32, 36, 40, 44, 48
+      const theta = (i / numStars) * Math.PI * 2 + Math.random() * 0.5;
+      const x = orbitRadius * Math.cos(theta);
+      const z = orbitRadius * Math.sin(theta);
+      const y = 0; // Flatten to 2D plane for perfect stability
+      
       const pos = new THREE.Vector3(x, y, z);
+      
+      // Orbital velocity around black hole
+      const vMag = Math.sqrt(G * blackHoleMass / orbitRadius);
       const tangent = new THREE.Vector3(-z, 0, x).normalize();
-      tangent.add(new THREE.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2));
-      tangent.normalize();
-      const vMag = Math.sqrt(0.1 * 500 / Math.max(0.1, radius));
       const vel = tangent.multiplyScalar(vMag);
-      out.push({
-        id: `body-${i}`,
+      
+      const starMass = 20 + Math.random() * 30; // Stars have mass 20-50
+      const star = {
+        id: `star-${i}`,
         position: pos,
         velocity: vel,
-        mass: 1,
-        radius: 0.2,
+        mass: starMass,
+        radius: 0.3 + Math.random() * 0.2,
         isStatic: false,
+        type: 'star',
         ownerId: null,
-      });
+      };
+      out.push(star);
+      stars.push(star);
     }
+
+    // 3. Create 60 Planets (6 per star)
+    const planetsPerStar = 6;
+    for (let s = 0; s < numStars; s++) {
+      const parentStar = stars[s];
+      for (let p = 0; p < planetsPerStar; p++) {
+        const planetOrbitRadius = 1.5 + p * 0.6; // Planets at 1.5, 2.1, 2.7, 3.3, 3.9, 4.5 from star
+        const angle = (p / planetsPerStar) * Math.PI * 2 + Math.random() * 0.3;
+        
+        // Position relative to star
+        const px = parentStar.position.x + planetOrbitRadius * Math.cos(angle);
+        const pz = parentStar.position.z + planetOrbitRadius * Math.sin(angle);
+        const py = 0; // Flatten planets too
+        
+        // Orbital velocity around the star + star's velocity
+        const pVMag = Math.sqrt(G * parentStar.mass / planetOrbitRadius);
+        const pTangent = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
+        const pVel = new THREE.Vector3(
+          parentStar.velocity.x + pTangent.x * pVMag,
+          parentStar.velocity.y + pTangent.y * pVMag,
+          parentStar.velocity.z + pTangent.z * pVMag
+        );
+        
+        out.push({
+          id: `planet-${s}-${p}`,
+          position: new THREE.Vector3(px, py, pz),
+          velocity: pVel,
+          mass: 0.05 + Math.random() * 0.1, // Small mass
+          radius: 0.15 + Math.random() * 0.15,
+          isStatic: false,
+          type: 'planet',
+          parentId: parentStar.id,
+          ownerId: null,
+        });
+      }
+    }
+    
     return out;
   }
 
@@ -100,7 +158,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
 
     // Ensure there's something to render immediately while waiting for server
     if (!bodiesRef.current || bodiesRef.current.length === 0) {
-      bodiesRef.current = generateDefaultBodies(51);
+      bodiesRef.current = generateDefaultBodies();
     }
 
     let s = null;
@@ -108,7 +166,8 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
 
     // Set up event listeners first (they can be set up before connection)
     const offInit = onInitData((data) => {
-      if (data && data.snapshot) {
+      // Only replace local bodies if server has actual data
+      if (data && data.snapshot && data.snapshot.bodies && data.snapshot.bodies.length > 0) {
         initFromSnapshot(data.snapshot);
       }
       if (data && data.hostId && s && s.id) {
@@ -214,6 +273,9 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         };
         
         bodiesRef.current.push(newBody);
+        setBodyCount(prev => prev + 1);
+        
+        // Send patch to all clients
         
         // Send patch to all clients
         sendEntityPatch(roomId, [{
@@ -270,9 +332,18 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         console.log("Successfully joined room:", roomId, "Socket ID:", socket.id);
       })
       .catch((err) => {
-        console.error("Failed to join room:", err);
-        // Optionally show user-facing error or retry
+        console.error("Failed to join room, defaulting to offline mode:", err);
+        setIsHost(true);
       });
+
+      // Shorter timeout to fallback to offline mode quickly if server is unreachable
+      const fallbackTimer = setTimeout(() => {
+        if (!s || !s.connected) {
+           console.log("Connection taking too long, enabling offline mode...");
+           setIsHost(true);
+        }
+      }, 2000);
+      cleanupFunctions.push(() => clearTimeout(fallbackTimer));
 
     // heartbeat to keep room alive
     const hb = setInterval(() => sendHeartbeat(roomId), 1000);
@@ -301,6 +372,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     // Start fixed 60Hz step
     let last = performance.now();
     tickTimer.current = setInterval(() => {
+      if (pausedRef.current) return;
       const now = performance.now();
       const dt = (TICK_MS) / 1000; // fixed dt in seconds
       try {
@@ -371,11 +443,31 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
       if (action === 'add') {
         const newId = `body-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const pos = params.pos || [15, 0, 0];
-        const vel = params.vel || [0, 0, 0];
+        let vel = params.vel || [0, 0, 0];
         const bodyType = params.type || 'planet';
         // Different defaults for stars vs planets
         const mass = params.mass !== undefined ? params.mass : (bodyType === 'star' ? 0.5 : 1);
         const radius = params.radius !== undefined ? params.radius : (bodyType === 'star' ? 0.15 : 0.5);
+        
+        // If velocity is zero, calculate orbital velocity around the black hole (body-0)
+        if (vel[0] === 0 && vel[1] === 0 && vel[2] === 0) {
+          const blackHole = bodiesRef.current.find(b => b.isStatic || b.isFixed);
+          if (blackHole) {
+            const bhPos = blackHole.position;
+            const dx = pos[0] - bhPos.x;
+            const dy = pos[1] - bhPos.y;
+            const dz = pos[2] - bhPos.z;
+            const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (dist > 0.1) {
+              // Orbital velocity magnitude: v = sqrt(G * M / r)
+              const G = 0.1; // gravity constant used in physics engine
+              const vMag = Math.sqrt(G * blackHole.mass / dist);
+              // Tangent direction (perpendicular to position vector, in XZ plane)
+              const tangent = new THREE.Vector3(-dz, 0, dx).normalize();
+              vel = [tangent.x * vMag, tangent.y * vMag, tangent.z * vMag];
+            }
+          }
+        }
         
         const newBody = {
           id: newId,
@@ -385,6 +477,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
           radius,
           isStatic: false,
           ownerId: clientId,
+          type: bodyType,
         };
         
         bodiesRef.current.push(newBody);
@@ -404,6 +497,7 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
         const idx = bodiesRef.current.findIndex((b) => b.id === targetId);
         if (idx >= 0) {
           bodiesRef.current.splice(idx, 1);
+          setBodyCount(prev => prev + 1);
         }
         return;
       }
@@ -453,12 +547,68 @@ export default function usePhysicsEngine(roomId, gravity = 0.1) {
     requestChangeLocal(null, 'add', { ...params, pos, mass: defaultMass, radius: defaultRadius, type: 'star' });
   }
 
+  function addBlackHole(params = {}) {
+    const pos = params.pos || [0, 0, 0];
+    const defaultMass = params.mass || 100;
+    const defaultRadius = params.radius || 1.5;
+    requestChangeLocal(null, 'add', { ...params, pos, mass: defaultMass, radius: defaultRadius, type: 'blackhole', isStatic: true, isFixed: true });
+  }
+
+  // Add planet that orbits a specific star
+  function addPlanetToStar(starId, params = {}) {
+    const star = bodiesRef.current.find(b => b.id === starId);
+    if (!star) {
+      console.warn('Star not found:', starId);
+      return;
+    }
+
+    // Orbital distance from the star (default 2-4 units)
+    const orbitRadius = params.orbitRadius || (2 + Math.random() * 2);
+    const angle = Math.random() * Math.PI * 2;
+    
+    // Position relative to star
+    const pos = [
+      star.position.x + orbitRadius * Math.cos(angle),
+      star.position.y + (Math.random() - 0.5) * 0.5, // slight Y variation
+      star.position.z + orbitRadius * Math.sin(angle)
+    ];
+    
+    // Calculate orbital velocity around the star
+    const G = 0.1;
+    const vMag = Math.sqrt(G * star.mass / orbitRadius);
+    // Tangent direction (perpendicular to position relative to star)
+    const tangent = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
+    
+    // Add star's velocity to get absolute velocity
+    const vel = [
+      star.velocity.x + tangent.x * vMag,
+      star.velocity.y + tangent.y * vMag,
+      star.velocity.z + tangent.z * vMag
+    ];
+    
+    const mass = params.mass !== undefined ? params.mass : 0.1; // Planets are light
+    const radius = params.radius !== undefined ? params.radius : 0.3;
+    
+    requestChangeLocal(null, 'add', {
+      ...params,
+      pos,
+      vel,
+      mass,
+      radius,
+      type: 'planet',
+      parentId: starId, // Link to parent star
+    });
+  }
+
   return {
     bodiesRef,
     isHost,
     requestChange: requestChangeLocal,
     addPlanet,
     addStar,
+    addBlackHole,
+    addPlanetToStar,
     localUser: localUser.current,
+    bodyCount,
   };
 }

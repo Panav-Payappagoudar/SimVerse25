@@ -7,8 +7,6 @@ import { updateBodies } from './PhysicsEngine';
 import * as THREE from 'three';
 
 export function Scene({ gravity, bodies: externalBodies, networked = false }) {
-    const [renderKey, setRenderKey] = useState(0);
-    const frameCount = useRef(0);
 
     // Initialize bodies (local-only) unless external bodies are provided
     const bodies = useMemo(() => {
@@ -60,15 +58,7 @@ export function Scene({ gravity, bodies: externalBodies, networked = false }) {
 
     const activeBodies = externalBodies || bodies;
 
-    // Force re-render every 10 frames when networked to update positions
-    useFrame(() => {
-        if (networked && externalBodies) {
-            frameCount.current++;
-            if (frameCount.current % 10 === 0) {
-                setRenderKey(prev => prev + 1);
-            }
-        }
-    });
+
 
     // Only run local physics if not networked and not provided external bodies
     if (!networked && !externalBodies) {
@@ -98,10 +88,10 @@ export function Scene({ gravity, bodies: externalBodies, networked = false }) {
             {blackHole && <BlackHole position={blackHolePosition} />}
 
             {/* Render Stars */}
-            {stars.length > 0 && <Stars key={`stars-${renderKey}`} bodies={stars} />}
+            {stars.length > 0 && <Stars bodies={stars} />}
 
             {/* Render Planets */}
-            {planets.length > 0 && <Planets key={`planets-${renderKey}`} bodies={planets} />}
+            {planets.length > 0 && <Planets bodies={planets} />}
 
             {/* Render any remaining bodies that aren't categorized */}
             {activeBodies.filter(b => 
@@ -110,7 +100,7 @@ export function Scene({ gravity, bodies: externalBodies, networked = false }) {
                 !stars.includes(b) && !planets.includes(b)
             ).length > 0 && (
                 <Planets 
-                    key={`other-${renderKey}`} 
+                    key={`other-bodies`} 
                     bodies={activeBodies.filter(b => 
                         !b.isFixed && !b.isStatic && 
                         b.type !== 'star' && b.type !== 'planet' &&

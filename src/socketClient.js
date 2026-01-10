@@ -11,7 +11,8 @@ function ensure(url = undefined) {
   
   // Use both transports - polling will fallback to websocket
   socket = io(backendURL, {
-    transports: ["polling", "websocket"],
+    transports: ["websocket"],
+    upgrade: false,
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 1000,

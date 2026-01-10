@@ -34,8 +34,6 @@ export function BlackHole({ position }) {
                 <torusGeometry args={[3, 0.1, 16, 100]} />
                 <meshBasicMaterial 
                     color="#ff4500" 
-                    emissive="#ff6600"
-                    emissiveIntensity={0.8}
                 />
             </mesh>
             

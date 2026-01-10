@@ -21,7 +21,7 @@ export default function initSocket(server) {
   });
 
   io.on("connection", (socket) => {
-    console.log(`socket connected: ${socket.id}`);
+    console.log(`socket connected: ${socket.id} transport: ${socket.conn.transport.name}`);
 
     socket.on("join_room", async ({ roomId, clientMeta } = {}) => {
       if (!roomId) return socket.emit("error", { message: "roomId required" });
@@ -159,7 +159,7 @@ export default function initSocket(server) {
       }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnecting", () => {
       console.log(`socket disconnected: ${socket.id}`);
 
       // Remove from all rooms and handle host failover

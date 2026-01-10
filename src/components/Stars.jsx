@@ -4,11 +4,11 @@ import { Trail } from '@react-three/drei';
 import * as THREE from 'three';
 
 const Star = ({ body }) => {
-    const meshRef = useRef();
+    const groupRef = useRef();
 
     useFrame(() => {
-        if (meshRef.current && body && body.position) {
-            meshRef.current.position.copy(body.position);
+        if (groupRef.current && body && body.position) {
+            groupRef.current.position.copy(body.position);
         }
     });
 
@@ -21,22 +21,22 @@ const Star = ({ body }) => {
     }, [body.id]);
 
     return (
-        <Trail
-            width={0.5}
-            length={8}
-            color={starColor}
-            attenuation={(t) => t * t}
-            local={false}
-        >
-            <mesh ref={meshRef}>
-                <sphereGeometry args={[radius, 16, 16]} />
-                <meshBasicMaterial 
-                    color={starColor}
-                    emissive={starColor}
-                    emissiveIntensity={1}
-                />
-            </mesh>
-        </Trail>
+        <group ref={groupRef}>
+            <Trail
+                width={0.5}
+                length={8}
+                color={starColor}
+                attenuation={(t) => t * t}
+                local={false}
+            >
+                <mesh>
+                    <sphereGeometry args={[radius, 16, 16]} />
+                    <meshBasicMaterial 
+                        color={starColor}
+                    />
+                </mesh>
+            </Trail>
+        </group>
     );
 };
 

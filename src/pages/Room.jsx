@@ -9,17 +9,9 @@ import PlanetControlPanel from '../components/PlanetControlPanel';
 
 export default function RoomPage() {
   const { roomId } = useParams();
-  const { bodiesRef, isHost, requestChange, addPlanet, addStar, localUser } = usePhysicsEngine(roomId, 0.1);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
-  const [renderKey, setRenderKey] = useState(0);
+  const { bodiesRef, isHost, requestChange, addPlanet, addStar, addBlackHole, addPlanetToStar, localUser } = usePhysicsEngine(roomId, 0.1, !isSimulationRunning);
 
-  // Force re-render every second to update body count and ensure bodies render
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      setRenderKey(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleSimulationToggle = () => {
     setIsSimulationRunning(!isSimulationRunning);
@@ -59,13 +51,15 @@ export default function RoomPage() {
         isHost={isHost}
         addPlanet={addPlanet}
         addStar={addStar}
+        addBlackHole={addBlackHole}
+        addPlanetToStar={addPlanetToStar}
         bodiesRef={bodiesRef}
         requestChange={requestChange}
         onSimulationToggle={handleSimulationToggle}
         isSimulationRunning={isSimulationRunning}
       />
 
-      <Canvas key={renderKey} camera={{ position: [0, 20, 40], fov: 60 }}>
+      <Canvas camera={{ position: [0, 20, 40], fov: 60 }}>
         <color attach="background" args={['#000000']} />
         <Scene gravity={0.1} bodies={bodiesRef.current} networked={true} />
         <OrbitControls />

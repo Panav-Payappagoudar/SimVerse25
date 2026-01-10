@@ -2,51 +2,73 @@ import * as THREE from 'three';
 
 export const updateBodies = (bodies, G, dt) => {
   const numBodies = bodies.length;
-  // Reset accelerations
-  // We can optimize this by not allocating new array every frame if performance is an issue,
-  // but for 50 bodies it's fine.
-  const accelerations = [];
-
-  for (let i = 0; i < numBodies; i++) {
-    accelerations[i] = new THREE.Vector3(0, 0, 0);
-  }
-
-  for (let i = 0; i < numBodies; i++) {
-    const bodyA = bodies[i];
-    
-    for (let j = i + 1; j < numBodies; j++) {
-      const bodyB = bodies[j];
-
-      // Calculate vector from A to B
-      const diff = new THREE.Vector3().subVectors(bodyB.position, bodyA.position);
-      const distSq = diff.lengthSq();
-      const dist = Math.sqrt(distSq);
-
-      // Softening parameter to prevent singularities
-      const softening = 0.5; 
-      if (dist < softening) continue; // or use softened gravity: 1 / (r^2 + eps^2)
-
-      const f = (G * bodyA.mass * bodyB.mass) / (distSq); // classic Newton
-
-      const force = diff.normalize().multiplyScalar(f);
-
-      // a = F/m
-      const accA = force.clone().divideScalar(bodyA.mass);
-      const accB = force.clone().divideScalar(bodyB.mass); // equal and opposite force magnitude -> similar calc
-
-      if (!bodyA.isFixed) accelerations[i].add(accA);
-      if (!bodyB.isFixed) accelerations[j].sub(accB); // Subtract because force on B is opposite
+  
+  // 1. Create a map for quick parent lookup
+  const bodyMap = new Map();
+  let blackHole = null;
+  
+  for (const b of bodies) {
+    bodyMap.set(b.id, b);
+    if (b.type === 'blackhole' || b.id === 'blackhole-0') {
+      blackHole = b;
     }
   }
 
-  // Symplectic Euler Integration
-  // v(t+1) = v(t) + a(t) * dt
-  // x(t+1) = x(t) + v(t+1) * dt
+  // Fallback if no explicit black hole found
+  if (!blackHole && bodies.length > 0) blackHole = bodies[0];
+
+  const accelerations = new Array(numBodies).fill(null).map(() => new THREE.Vector3(0, 0, 0));
+
+  // 2. Calculate forces based on Hierarchy
   for (let i = 0; i < numBodies; i++) {
     const body = bodies[i];
-    if (body.isFixed) continue;
+    if (body.isFixed || body.isStatic) continue;
 
+    let parent = null;
+
+    // A. Explicit Parent (e.g., Planet -> Star)
+    if (body.parentId) {
+      parent = bodyMap.get(body.parentId);
+    } 
+    // B. Stars orbit the Black Hole
+    else if (body.type === 'star') {
+      parent = blackHole;
+    }
+    // C. Planets without parent orbit the Black Hole (or stray bodies)
+    else {
+      parent = blackHole;
+    }
+
+    // If no parent found (or body is the black hole itself), no gravity calls
+    if (!parent || parent === body) continue;
+
+    // Calculate Vector from Body to Parent
+    const diff = new THREE.Vector3().subVectors(parent.position, body.position);
+    const distSq = diff.lengthSq();
+    const dist = Math.sqrt(distSq);
+
+    // Softening (prevent infinite force at 0 distance)
+    if (dist < 0.5) continue; 
+
+    // Gravity Force: F = G * M1 * M2 / r^2
+    // We want Acceleration: a = F / M_body = G * M_parent / r^2
+    const fMag = (G * parent.mass) / distSq; 
+    
+    // Direction: Body -> Parent
+    const acc = diff.normalize().multiplyScalar(fMag);
+    
+    accelerations[i].add(acc);
+  }
+
+  // 3. Integration (Symplectic Euler)
+  for (let i = 0; i < numBodies; i++) {
+    const body = bodies[i];
+    if (body.isFixed || body.isStatic) continue;
+
+    // v(t+1) = v(t) + a(t) * dt
     body.velocity.add(accelerations[i].multiplyScalar(dt));
+    
+    // x(t+1) = x(t) + v(t+1) * dt
     body.position.add(body.velocity.clone().multiplyScalar(dt));
   }
 };

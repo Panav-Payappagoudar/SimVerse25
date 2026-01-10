@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import * as THREE from 'three';
 
-export default function PlanetControlPanel({ isHost, addPlanet, addStar, bodiesRef, requestChange, onSimulationToggle, isSimulationRunning = true }) {
+export default function PlanetControlPanel({ isHost, addPlanet, addStar, addBlackHole, addPlanetToStar, bodiesRef, requestChange, onSimulationToggle, isSimulationRunning = true }) {
   const [mass, setMass] = useState(1);
   const [radius, setRadius] = useState(0.5);
   const [posX, setPosX] = useState(15);
@@ -11,6 +11,7 @@ export default function PlanetControlPanel({ isHost, addPlanet, addStar, bodiesR
   const [velY, setVelY] = useState(0);
   const [velZ, setVelZ] = useState(0);
   const [selectedBodyId, setSelectedBodyId] = useState(null);
+  const [selectedParentStarId, setSelectedParentStarId] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const selectedBody = selectedBodyId 
@@ -341,6 +342,73 @@ export default function PlanetControlPanel({ isHost, addPlanet, addStar, bodiesR
             style={{ ...buttonStyle, flex: 1, margin: 0, padding: '12px', fontSize: '14px', fontWeight: 'bold', background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}
           >
             ⭐ Add Star
+          </button>
+          <button
+            onClick={() => {
+              addBlackHole({
+                mass: mass > 50 ? mass : 100,
+                radius: radius > 1 ? radius : 1.5,
+                pos: [posX, posY, posZ],
+              });
+              // Reset to defaults after adding
+              setMass(100);
+              setRadius(1.5);
+              setPosX(0);
+              setPosY(0);
+              setPosZ(0);
+              setVelX(0);
+              setVelY(0);
+              setVelZ(0);
+            }}
+            style={{ ...buttonStyle, flex: 1, margin: 0, padding: '12px', fontSize: '14px', fontWeight: 'bold', background: 'linear-gradient(135deg, #232526 0%, #414345 100%)' }}
+          >
+            🕳️ Add Black Hole
+          </button>
+        </div>
+      )}
+
+      {/* Add Planet to Star Section */}
+      {isHost && (
+        <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #444' }}>
+          <label style={labelStyle}>🌍 Add Planet to Orbit a Star:</label>
+          <select
+            value={selectedParentStarId || ''}
+            onChange={(e) => setSelectedParentStarId(e.target.value || null)}
+            style={{ ...inputStyle, padding: '6px', backgroundColor: '#333', color: 'white', border: '1px solid #555', marginBottom: '8px' }}
+          >
+            <option value="">-- Select a Star --</option>
+            {bodiesRef.current
+              .filter(b => b.type === 'star' || (!b.type && !b.isFixed && !b.isStatic && b.radius <= 0.3))
+              .map((star) => (
+                <option key={star.id} value={star.id}>
+                  ⭐ {star.id.slice(0, 15)}... (m:{star.mass?.toFixed(1)})
+                </option>
+              ))}
+          </select>
+          <button
+            onClick={() => {
+              if (selectedParentStarId) {
+                addPlanetToStar(selectedParentStarId, {
+                  mass: mass < 1 ? mass : 0.1,
+                  radius: radius < 0.5 ? radius : 0.3,
+                });
+              }
+            }}
+            disabled={!selectedParentStarId}
+            style={{
+              ...buttonStyle,
+              width: '100%',
+              margin: 0,
+              padding: '10px',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              background: selectedParentStarId 
+                ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
+                : '#555',
+              cursor: selectedParentStarId ? 'pointer' : 'not-allowed',
+            }}
+          >
+            🌍 Add Planet to Selected Star
           </button>
         </div>
       )}
