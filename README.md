@@ -117,7 +117,9 @@ For the technically curious, here is the core logic governing our universe:
 
 **The Law of Universal Gravitation:**
 We calculate the force vector between every pair of bodies $(i, j)$:
+
 $$\vec{F}_{ij} = G \frac{m_i m_j}{|\vec{r}_{ij}|^2 + \epsilon^2} \hat{r}_{ij}$$
+
 *(Note the $\epsilon$ softening parameter added to avoid division by zero during collisions)*
 
 **Integration Strategy:**
