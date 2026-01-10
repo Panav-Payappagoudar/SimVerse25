@@ -1,142 +1,138 @@
-# SimVerse25 - Gravity Sandbox
+# 🌌 Gravity Sandbox | SimVerse'25
+### *Visualizing the Invisible Forces of the Cosmos in Real-Time*
 
-A mesmerizing 3D gravity simulation sandbox built with React and Three.js. Watch as celestial bodies orbit around a central black hole, with adjustable gravitational parameters that let you explore the dynamics of space!
+![SimVerse Banner](https://img.shields.io/badge/Hackathon-SimVerse'25-8A2BE2?style=for-the-badge) 
+![Team](https://img.shields.io/badge/Team-Meow-FFD700?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Deployed-success?style=for-the-badge)
 
-## 🌌 Features
+> **"Gravity is not a force, but a curvature of time and space."** — *Interstellar*
 
-- **Interactive 3D Gravity Simulation**: Experience realistic gravitational physics with 50 orbiting stars around a central black hole
-- **Adjustable Gravity Parameter**: Control the gravitational constant (G) from 0.01 to 1.0 to see how it affects orbital mechanics
-- **Real-time Physics Engine**: Custom-built physics engine implementing Newtonian gravity with symplectic Euler integration
-- **Visual Trails**: Stars leave beautiful motion trails as they orbit, creating stunning visual patterns
-- **Orbital Controls**: Rotate, pan, and zoom to view the simulation from any angle
-- **Reset Functionality**: Easily reset the simulation to its initial state
+---
 
-## 🚀 Live Demo
+## 🚀 The Pitch
+Physics textbooks show static diagrams of orbits. But the universe is **chaotic, dynamic, and unpredictable**.
 
-Check out the live demo [here](https://orbiting-canvas-3.onrender.com/) .
+**Gravity Sandbox** is a real-time, collaborative N-Body physics engine that runs directly in your browser. We bridge the gap between abstract equations and visual intuition, allowing users to experience **Chaos Theory**, **Gravity Assists**, and **Orbital Resonance** firsthand.
 
-## 🛠️ Tech Stack
+Unlike standard simulations, this is a **Shared Reality**. Using high-frequency WebSockets, multiple users can join the same room, spawn planets, and watch as their gravitational fields interact in real-time. **It's like Google Docs, but for Astrophysics.**
 
-- **React**: Component-based UI framework
-- **Three.js**: 3D graphics library for rendering the simulation
-- **@react-three/fiber**: React renderer for Three.js
-- **@react-three/drei**: Useful helpers and abstractions for Three.js
-- **Vite**: Next-generation frontend tooling
+### 🔗 [Launch Live Simulation](https://orbiting-canvas-3.onrender.com/)
+*(Click to enter the sandbox)*
 
-## 📋 How It Works
+---
 
-The simulation features:
-1. A central massive black hole (invisible but gravitationally influential)
-2. 50 stars initialized with orbital velocities to create stable orbits
-3. Real-time gravitational calculations using Newton's law of universal gravitation
-4. Softening parameter to prevent singularities when bodies get too close
-5. Symplectic Euler integration for stable orbital mechanics
+## 👥 Team Meow
+**Submitted for SimVerse'25 Hackathon** *Organized by ACS & ACM Chapters | VIT-AP University*
 
-The physics engine calculates gravitational forces between all bodies and updates their positions and velocities in real-time, creating beautiful orbital patterns that respond dynamically to changes in the gravity parameter.
+| Team Member | Registration | Role |
+| :--- | :--- | :--- |
+| **Panav Payappagoudar** | 24BCE7077 | Full Stack & Physics Engine |
+| **Debarshi Majumber** | 24BCE7692 | UI/UX & Data Architecture |
+
+---
+
+## 🌟 Key Features
+
+### 1. 🤝 Real-Time Collaborative Multiplayer
+Built on a **Host-Relay Architecture** using **Socket.io**.
+* **Zero-Lag Sync:** When one user modifies a solar system, changes are emitted instantly to all connected clients.
+* **Shared Creativity:** One user can be the "Architect" placing stars, while another acts as "Destructor" throwing asteroids to disrupt orbits.
+* **Optimistic UI:** Local physics run at 60FPS while syncing state across the network.
+
+### 2. ⚛️ Custom N-Body Physics Engine
+We did not use pre-made physics libraries (like Cannon.js). We wrote a custom symplectic integrator from scratch.
+* **Newtonian Gravity:** Every object attracts every other object ($F = G \frac{m_1 m_2}{r^2}$).
+* **Softening Parameter:** Prevents singularities (infinity errors) when objects collide.
+* **Symplectic Euler Integration:** Ensures stable orbits over long durations without energy drift.
+
+### 3. 🎬 "Interstellar" Grade Visuals
+* **Accretion Disks:** Procedural shaders mimicking the "Gargantua" black hole.
+* **Orbital Trails:** Dynamic line rendering to visualize the history of a planet's path.
+* **Bloom & Post-Processing:** Cinematic lighting effects using `@react-three/postprocessing`.
+
+---
+
+## 🛠️ Tech Stack & Architecture
+
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend** | ![React](https://img.shields.io/badge/-React-61DAFB?logo=react&logoColor=black) ![Three.js](https://img.shields.io/badge/-Three.js-black?logo=three.js&logoColor=white) | **React Three Fiber** for the 3D scene graph. |
+| **Backend** | ![Node.js](https://img.shields.io/badge/-Node.js-339933?logo=node.js&logoColor=white) ![Socket.io](https://img.shields.io/badge/-Socket.io-black?logo=socket.io&logoColor=white) | **Express + Socket.io** relay server for real-time state synchronization. |
+| **Language** | ![JavaScript](https://img.shields.io/badge/-JavaScript-F7DF1E?logo=javascript&logoColor=black) | Full-stack JS implementation. |
+| **Build Tool** | ![Vite](https://img.shields.io/badge/-Vite-646CFF?logo=vite&logoColor=white) | Ultra-fast HMR and bundling. |
+
+### The "Host-Relay" Logic
+To ensure performance, we don't run physics on the server.
+1.  **The Host:** The first user to join becomes the "Host". Their browser calculates the physics (CPU).
+2.  **The Relay:** The Host emits positions to the Server.
+3.  **The Guests:** The Server broadcasts these positions to all other users (Guests), who purely render the visuals.
+
+---
 
 ## 🏗️ Project Structure
 
-```
+```bash
 src/
 ├── components/
-│   ├── BlackHole.jsx     # Invisible central gravitational anchor
-│   ├── Stars.jsx         # Visual representation of orbiting bodies
-│   └── UI.jsx           # Controls for adjusting gravity and resetting
-├── App.jsx              # Main application component
-├── Scene.jsx            # Main 3D scene containing physics simulation
-├── PhysicsEngine.js     # Core physics calculations and integration
-└── main.jsx             # Entry point
+│   ├── BlackHole.jsx     # Shader-based central gravitational anchor
+│   ├── Stars.jsx         # InstancedMesh for high-performance rendering
+│   ├── SpacetimeGrid.jsx # Visualizes gravity wells (Einstein grid)
+│   └── UI.jsx            # Leva controls for G-constant & Time Scale
+├── engine/
+│   └── Physics.js        # The custom Euler Integration loop
+├── server/
+│   └── server.js         # Socket.io real-time relay logic
+├── App.jsx               # Main Canvas entry point
+└── main.jsx              # React DOM root
 ```
 
-## 🚀 Getting Started
+---
 
-### Prerequisites
+## 🚀 Local Installation
 
-- Node.js (v16 or higher)
-- npm or yarn
+Want to run the simulation locally?
 
-### Installation
+1.  **Clone the Repo**
+    ```bash
+    git clone [https://github.com/Panav-Payappagoudar/SimVerse25.git](https://github.com/Panav-Payappagoudar/SimVerse25.git)
+    cd SimVerse25
+    ```
 
-1. Clone the repository:
-```bash
-git clone https://github.com/Panav-Payappagoudar/SimVerse25.git
-```
+2.  **Install Dependencies**
+    ```bash
+    npm install
+    ```
 
-2. Navigate to the project directory:
-```bash
-cd SimVerse25
-```
+3.  **Run Development Server**
+    ```bash
+    npm run dev
+    ```
+    *Open `http://localhost:5173` to view the simulation.*
 
-3. Install dependencies:
-```bash
-npm install
-```
+---
 
-4. Start the development server:
-```bash
-npm run dev
-```
+## 🧮 Physics Implementation Details
 
-5. Open your browser and visit `http://localhost:5173`
+For the technically curious, here is the core logic governing our universe:
 
-### Building for Production
+**The Law of Universal Gravitation:**
+We calculate the force vector between every pair of bodies $(i, j)$:
+$$\vec{F}_{ij} = G \frac{m_i m_j}{|\vec{r}_{ij}|^2 + \epsilon^2} \hat{r}_{ij}$$
+*(Note the $\epsilon$ softening parameter added to avoid division by zero during collisions)*
 
-To build the project for production:
+**Integration Strategy:**
+We use a **Semi-Implicit Euler** approach for stability:
+1.  $\vec{v}_{t+1} = \vec{v}_t + \vec{a}(\vec{x}_t) \cdot \Delta t$
+2.  $\vec{x}_{t+1} = \vec{x}_t + \vec{v}_{t+1} \cdot \Delta t$
 
-```bash
-npm run build
-```
-
-The built files will be placed in the `dist/` directory.
-
-## ⚙️ Configuration
-
-The simulation parameters can be adjusted in the UI:
-- **Gravity (G)**: Adjust the gravitational constant from 0.01 to 1.0
-- **Reset Button**: Restart the simulation with original orbital configurations
-
-## 🧮 Physics Implementation
-
-The simulation implements:
-- Newtonian gravity: F = G × (m₁ × m₂) / r²
-- Velocity Verlet integration for stable orbits
-- Softening parameter to handle close encounters
-- Conservation of momentum considerations
-
-The central black hole has a mass of 500 units while orbiting stars have a mass of 1 unit each.
-
-## 🔧 Customization
-
-You can customize the simulation by modifying:
-- Number of stars in `Scene.jsx`
-- Initial positions and velocities in `Scene.jsx`
-- Physics parameters in `PhysicsEngine.js`
-- Visual properties in the component files
-
-## 🤝 Contributing
-
-Contributions are welcome! Here are some ideas for enhancements:
-- Add collision detection
-- Implement different celestial body types
-- Add export functionality for simulation states
-- Include preset scenarios (binary star systems, etc.)
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+---
 
 ## 🙏 Acknowledgments
 
-- Built with [Vite](https://vitejs.dev/) and [React](https://react.dev/)
-- Powered by [Three.js](https://threejs.org/) for 3D rendering
-- Uses [@react-three/fiber](https://docs.pmnd.rs/react-three-fiber) and [@react-three/drei](https://github.com/pmndrs/drei)
+* **SimVerse'25 Organizers** (ACS & ACM Chapters) for the platform.
+* **Three.js Community** for the incredible open-source graphics tools.
+* **Newton & Einstein** for the math.
 
-## 🐛 Issues
+---
 
-If you encounter any issues or have suggestions for improvements, please open an issue on GitHub.
+*Built with ❤️ and ☕ by Team Meow*
