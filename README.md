@@ -38,8 +38,8 @@ Imagine a physics classroom where the whiteboard comes alive.
 
 | Team Member | Registration | Role |
 | :--- | :--- | :--- |
-| **Panav Payappagoudar** | 24BCE7077 | Full Stack & Physics Engine |
-| **Debarshi Majumber** | 24BCE7692 | UI/UX & Data Architecture |
+| **Panav Payappagoudar** | 24BCE7077 | UI-UX & Physics Engine |
+| **Debarshi Majumber** | 24BCE7692 | Backend & Data Architecture |
 
 ---
 
